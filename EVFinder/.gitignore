@@ -36,5 +36,4 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# Auth0 setup documentation (contains sensitive setup instructions)
-AUTH0_SETUP.md
+app-example
