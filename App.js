@@ -10,7 +10,7 @@ import ChargerFinderScreen from './screens/ChargerFinderScreen';
 import ReservationScreen from './screens/ReservationScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ReservationsScreen from './screens/ReservationsScreen';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Platform } from 'react-native';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -36,13 +36,20 @@ function MainTabNavigator() {
         tabBarActiveTintColor: '#4CAF50',
         tabBarInactiveTintColor: 'gray',
         tabBarStyle: {
-          paddingBottom: 5,
-          paddingTop: 5,
-          height: 60,
+          paddingBottom: Platform.OS === 'ios' ? 25 : 10,
+          paddingTop: 10,
+          height: Platform.OS === 'ios' ? 85 : 70,
+          backgroundColor: 'white',
+          borderTopWidth: 1,
+          borderTopColor: '#f0f0f0',
         },
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '500',
+          marginBottom: Platform.OS === 'ios' ? 5 : 0,
+        },
+        tabBarIconStyle: {
+          marginTop: 5,
         },
       })}
     >

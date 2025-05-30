@@ -126,7 +126,7 @@ export default function ReservationScreen({ navigation, route }) {
       [
         {
           text: 'OK',
-          onPress: () => navigation.navigate('ChargerFinder')
+          onPress: () => navigation.navigate('MainTabs', { screen: 'ChargerFinder' })
         }
       ]
     );
