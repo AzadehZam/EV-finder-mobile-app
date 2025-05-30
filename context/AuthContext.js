@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ApiService from '../services/api';
 
 const AuthContext = createContext();
 
@@ -21,12 +22,60 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuthState = async () => {
     try {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        setUser(JSON.parse(userData));
+      // Check if we have a JWT token
+      const token = await ApiService.getToken();
+      if (token) {
+        // Try to get user profile from backend
+        try {
+          const response = await ApiService.getUserProfile();
+          if (response.success) {
+            setUser(response.data);
+          } else {
+            // Token might be invalid, clear it
+            await ApiService.removeToken();
+            await AsyncStorage.removeItem('user');
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+          // Token might be expired, clear it
+          await ApiService.removeToken();
+          await AsyncStorage.removeItem('user');
+        }
+      } else {
+        // Fallback to local storage for backward compatibility
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          setUser(JSON.parse(userData));
+        }
       }
     } catch (error) {
       console.error('Error checking auth state:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithAuth0 = async (auth0UserInfo) => {
+    try {
+      setIsLoading(true);
+      
+      // Send Auth0 user info to backend
+      const response = await ApiService.authenticateWithAuth0(auth0UserInfo);
+      
+      if (response.success) {
+        const userData = response.data.user;
+        
+        // Store user data locally
+        await AsyncStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        
+        return { success: true, user: userData };
+      } else {
+        throw new Error(response.message || 'Authentication failed');
+      }
+    } catch (error) {
+      console.error('Error during Auth0 login:', error);
+      return { success: false, error: error.message };
     } finally {
       setIsLoading(false);
     }
@@ -43,10 +92,47 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Clear backend token
+      await ApiService.removeToken();
+      
+      // Clear local storage
       await AsyncStorage.removeItem('user');
+      
       setUser(null);
     } catch (error) {
-      console.error('Error removing user data:', error);
+      console.error('Error during logout:', error);
+    }
+  };
+
+  const refreshUserData = async () => {
+    try {
+      const response = await ApiService.getUserProfile();
+      if (response.success) {
+        const userData = response.data;
+        await AsyncStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        return userData;
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+    return null;
+  };
+
+  const updateUserProfile = async (profileData) => {
+    try {
+      const response = await ApiService.updateUserProfile(profileData);
+      if (response.success) {
+        const updatedUser = response.data;
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+        return { success: true, user: updatedUser };
+      } else {
+        return { success: false, error: response.message };
+      }
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      return { success: false, error: error.message };
     }
   };
 
@@ -54,7 +140,10 @@ export const AuthProvider = ({ children }) => {
     user,
     isLoading,
     login,
+    loginWithAuth0,
     logout,
+    refreshUserData,
+    updateUserProfile,
     isAuthenticated: !!user,
   };
 

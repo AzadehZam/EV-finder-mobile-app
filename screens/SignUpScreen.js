@@ -20,7 +20,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function SignUpScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithAuth0 } = useAuth();
 
   // Auth0 configuration for Expo AuthSession
   const discovery = {
@@ -83,32 +83,29 @@ export default function SignUpScreen({ navigation }) {
 
       const userInfo = await userInfoResponse.json();
 
-      // Save user to context and AsyncStorage
-      await login({
-        id: userInfo.sub,
-        email: userInfo.email,
-        name: userInfo.name,
-        picture: userInfo.picture,
-        accessToken: tokenResponse.accessToken,
-        refreshToken: tokenResponse.refreshToken,
-      });
+      // Use the new backend authentication
+      const authResult = await loginWithAuth0(userInfo);
 
-      Alert.alert(
-        'Welcome to EV Finder!',
-        'You have successfully signed in with Google.',
-        [
-          {
-            text: 'Continue',
-            onPress: () => {
-              // Navigate to main app screen (to be implemented)
-              console.log('Navigate to main app');
-              // navigation.navigate('MainApp');
+      if (authResult.success) {
+        Alert.alert(
+          'Welcome to EV Finder!',
+          'You have successfully signed in with Google.',
+          [
+            {
+              text: 'Continue',
+              onPress: () => {
+                // Navigate to main app screen (to be implemented)
+                console.log('Navigate to main app');
+                // navigation.navigate('MainApp');
+              },
             },
-          },
-        ]
-      );
+          ]
+        );
+      } else {
+        throw new Error(authResult.error || 'Backend authentication failed');
+      }
     } catch (error) {
-      console.error('Token exchange error:', error);
+      console.error('Authentication error:', error);
       Alert.alert(
         'Authentication Failed',
         'There was an error completing the sign-in process. Please try again.',
