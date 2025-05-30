@@ -159,7 +159,7 @@ export default function ReservationsScreen({ navigation }) {
       {type === 'upcoming' && (
         <TouchableOpacity 
           style={styles.findChargersButton}
-          onPress={() => navigation.navigate('MainTabs', { screen: 'ChargerFinder' })}
+          onPress={() => navigation.navigate('ChargerFinder')}
         >
           <Text style={styles.findChargersButtonText}>Find Chargers</Text>
         </TouchableOpacity>
