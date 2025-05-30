@@ -390,6 +390,17 @@ export default function ChargerFinderScreen({ navigation }) {
                   <Text style={styles.detailText}>{charger.price}</Text>
                 </View>
               </View>
+
+              {/* Reserve Button - Only show for selected charger */}
+              {selectedCharger?.id === charger.id && (
+                <TouchableOpacity 
+                  style={styles.reserveButton}
+                  onPress={() => navigation.navigate('Reservation', { charger: charger })}
+                >
+                  <MaterialIcons name="event-available" size={20} color="white" />
+                  <Text style={styles.reserveButtonText}>Reserve This Charger</Text>
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -611,5 +622,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 4,
+  },
+  reserveButton: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  reserveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+    marginLeft: 8,
   },
 }); 
