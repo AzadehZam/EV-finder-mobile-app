@@ -13,7 +13,7 @@
 //    - Replace the values below
 // 
 // 4. Configure Allowed Callback URLs (add ALL of these):
-//    - https://your-netlify-app-name.netlify.app
+//    - https://gregarious-mochi-7bf99a.netlify.app
 //    - http://localhost:19006
 //    - https://localhost:19006
 //    - exp://localhost:19000
@@ -22,7 +22,7 @@
 //    - com.evfinder.app://dev-zrjqxip57a10h8fo.us.auth0.com/android/com.evfinder.app/callback
 // 
 // 5. Configure Allowed Logout URLs (add ALL of these):
-//    - https://your-netlify-app-name.netlify.app
+//    - https://gregarious-mochi-7bf99a.netlify.app
 //    - http://localhost:19006
 //    - https://localhost:19006
 //    - exp://localhost:19000
@@ -31,7 +31,7 @@
 //    - com.evfinder.app://dev-zrjqxip57a10h8fo.us.auth0.com/android/com.evfinder.app/callback
 // 
 // 6. Configure Allowed Web Origins (add these):
-//    - https://your-netlify-app-name.netlify.app
+//    - https://gregarious-mochi-7bf99a.netlify.app
 //    - http://localhost:19006
 //    - https://localhost:19006
 // 
@@ -42,6 +42,8 @@
 // 
 // 8. Update the values below with your actual Auth0 credentials:
 
+import { Platform } from 'react-native';
+
 export const auth0Config = {
   domain: 'dev-zrjqxip57a10h8fo.us.auth0.com', // e.g., 'dev-abc123.us.auth0.com'
   clientId: 'yfs6rraoJ69SpEu4wLmK0HEKt1hQ00io', // e.g., 'abc123def456ghi789'
@@ -49,11 +51,15 @@ export const auth0Config = {
 
 // Get the current URL for web deployment
 const getRedirectUrl = () => {
-  if (typeof window !== 'undefined') {
-    // Web environment
-    return window.location.origin;
+  if (Platform.OS === 'web') {
+    // Web environment - check if window exists
+    if (typeof window !== 'undefined' && window.location) {
+      return window.location.origin;
+    }
+    // Fallback for web
+    return 'http://localhost:19006';
   }
-  // Mobile environment
+  // Mobile environment (iOS/Android)
   return 'exp://localhost:19000';
 };
 
