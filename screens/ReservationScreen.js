@@ -13,9 +13,11 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import ApiService from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function ReservationScreen({ navigation, route }) {
   const { charger } = route.params;
+  const { user, isAuthenticated } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState('09:00');
   const [selectedDuration, setSelectedDuration] = useState('1 hour');
@@ -64,6 +66,18 @@ export default function ReservationScreen({ navigation, route }) {
   }, [selectedDate, selectedTime, selectedDuration]);
 
   const checkAvailability = async () => {
+    // Only check availability if user is authenticated
+    if (!isAuthenticated) {
+      // Set default availability for non-authenticated users
+      setAvailability({
+        isAvailable: true,
+        availableConnectors: charger.connectorTypes?.length || 1,
+        totalConnectors: charger.connectorTypes?.length || 1,
+        requiresAuth: true // Flag to indicate authentication is needed
+      });
+      return;
+    }
+
     try {
       setAvailabilityLoading(true);
       
@@ -97,13 +111,24 @@ export default function ReservationScreen({ navigation, route }) {
       }
     } catch (error) {
       console.error('Error checking availability:', error);
-      // Fallback: assume available when API is not reachable
-      setAvailability({
-        isAvailable: true,
-        availableConnectors: charger.connectorTypes?.length || 1,
-        totalConnectors: charger.connectorTypes?.length || 1,
-        offline: true // Flag to indicate this is offline data
-      });
+      
+      // Handle authentication errors specifically
+      if (error.message.includes('Access token required') || error.message.includes('401')) {
+        setAvailability({
+          isAvailable: true,
+          availableConnectors: charger.connectorTypes?.length || 1,
+          totalConnectors: charger.connectorTypes?.length || 1,
+          requiresAuth: true
+        });
+      } else {
+        // Fallback: assume available when API is not reachable
+        setAvailability({
+          isAvailable: true,
+          availableConnectors: charger.connectorTypes?.length || 1,
+          totalConnectors: charger.connectorTypes?.length || 1,
+          offline: true // Flag to indicate this is offline data
+        });
+      }
     } finally {
       setAvailabilityLoading(false);
     }
@@ -190,6 +215,22 @@ export default function ReservationScreen({ navigation, route }) {
   };
 
   const handleReservation = async () => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Authentication Required',
+        'Please log in to make a reservation.',
+        [
+          {
+            text: 'Log In',
+            onPress: () => navigation.navigate('SignIn')
+          },
+          { text: 'Cancel' }
+        ]
+      );
+      return;
+    }
+
     // Validate before confirming reservation
     if (!isCurrentSelectionValid()) {
       Alert.alert(
@@ -536,18 +577,30 @@ export default function ReservationScreen({ navigation, route }) {
         ) : availability && (
           <View style={styles.availabilityStatus}>
             <MaterialIcons 
-              name={availability.isAvailable ? "check-circle" : "cancel"} 
+              name={
+                availability.requiresAuth ? "login" :
+                availability.isAvailable ? "check-circle" : "cancel"
+              } 
               size={20} 
-              color={availability.isAvailable ? "#4CAF50" : "#F44336"} 
+              color={
+                availability.requiresAuth ? "#FF9800" :
+                availability.isAvailable ? "#4CAF50" : "#F44336"
+              } 
             />
             <Text style={[
               styles.availabilityText,
-              { color: availability.isAvailable ? "#4CAF50" : "#F44336" }
-            ]}>
-              {availability.isAvailable 
-                ? `Available (${availability.availableConnectors} of ${availability.totalConnectors} connectors)`
-                : `Not available (${availability.reservedConnectors} of ${availability.totalConnectors} reserved)`
+              { 
+                color: availability.requiresAuth ? "#FF9800" :
+                       availability.isAvailable ? "#4CAF50" : "#F44336" 
               }
+            ]}>
+              {availability.requiresAuth 
+                ? "Login required for real-time availability"
+                : availability.isAvailable 
+                  ? `Available (${availability.availableConnectors} of ${availability.totalConnectors} connectors)`
+                  : `Not available (${availability.reservedConnectors || 0} of ${availability.totalConnectors} reserved)`
+              }
+              {availability.offline && " (Offline mode)"}
             </Text>
           </View>
         )}
@@ -600,13 +653,22 @@ export default function ReservationScreen({ navigation, route }) {
           {loading ? (
             <ActivityIndicator size="small" color="white" />
           ) : (
-            <MaterialIcons name="event-available" size={24} color="white" />
+            <MaterialIcons 
+              name={!isAuthenticated ? "login" : "event-available"} 
+              size={24} 
+              color="white" 
+            />
           )}
           <Text style={[
             styles.reserveButtonText,
             (!isCurrentSelectionValid() || loading) && styles.disabledReserveButtonText
           ]}>
-            {loading ? 'Creating Reservation...' : 'Reserve Now'}
+            {loading 
+              ? 'Creating Reservation...' 
+              : !isAuthenticated 
+                ? 'Login to Reserve' 
+                : 'Reserve Now'
+            }
           </Text>
         </TouchableOpacity>
       </View>
