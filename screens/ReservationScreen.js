@@ -7,15 +7,30 @@ import {
   SafeAreaView,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import ApiService from '../services/api';
 
 export default function ReservationScreen({ navigation, route }) {
   const { charger } = route.params;
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState('09:00');
   const [selectedDuration, setSelectedDuration] = useState('1 hour');
+  const [loading, setLoading] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availability, setAvailability] = useState(null);
+  
+  // Vehicle information
+  const [vehicleInfo, setVehicleInfo] = useState({
+    make: '',
+    model: '',
+    batteryCapacity: '',
+    currentCharge: ''
+  });
+  const [notes, setNotes] = useState('');
 
   // Initialize with a valid time slot
   useEffect(() => {
@@ -40,6 +55,56 @@ export default function ReservationScreen({ navigation, route }) {
       setSelectedTime(availableSlot);
     }
   }, []);
+
+  // Check availability when time selection changes
+  useEffect(() => {
+    if (selectedDate && selectedTime && selectedDuration) {
+      checkAvailability();
+    }
+  }, [selectedDate, selectedTime, selectedDuration]);
+
+  const checkAvailability = async () => {
+    try {
+      setAvailabilityLoading(true);
+      
+      const startTime = new Date(selectedDate);
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      startTime.setHours(hours, minutes, 0, 0);
+      
+      const endTime = new Date(startTime);
+      const durationMinutes = getDurationInMinutes(selectedDuration);
+      endTime.setMinutes(endTime.getMinutes() + durationMinutes);
+      
+      // Use the first available connector type for availability check
+      const connectorType = charger.connectorTypes?.[0]?.type || 'CCS';
+      
+      const response = await ApiService.checkAvailability(
+        charger._id || charger.id,
+        connectorType,
+        startTime.toISOString(),
+        endTime.toISOString()
+      );
+      
+      if (response.success) {
+        setAvailability(response.data);
+      }
+    } catch (error) {
+      console.error('Error checking availability:', error);
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
+
+  const getDurationInMinutes = (duration) => {
+    switch (duration) {
+      case '30 min': return 30;
+      case '1 hour': return 60;
+      case '2 hours': return 120;
+      case '3 hours': return 180;
+      case '4 hours': return 240;
+      default: return 60;
+    }
+  };
 
   // Generate next 7 days for date selection
   const getNextDays = () => {
@@ -106,30 +171,97 @@ export default function ReservationScreen({ navigation, route }) {
 
   // Validate if current selection is valid
   const isCurrentSelectionValid = () => {
-    return !isTimeSlotPast(selectedTime, selectedDate);
+    return !isTimeSlotPast(selectedTime, selectedDate) && 
+           (availability?.isAvailable !== false);
   };
 
-  const handleReservation = () => {
+  const handleReservation = async () => {
     // Validate before confirming reservation
     if (!isCurrentSelectionValid()) {
       Alert.alert(
-        'Invalid Time Selection',
-        'The selected time has already passed. Please choose a future time slot.',
+        'Invalid Selection',
+        'The selected time has already passed or is not available. Please choose a different time slot.',
         [{ text: 'OK' }]
       );
       return;
     }
 
-    Alert.alert(
-      'Reservation Confirmed!',
-      `Your charging session at ${charger.name} has been reserved for ${formatDate(selectedDate)} at ${selectedTime} for ${selectedDuration}.`,
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack()
-        }
-      ]
-    );
+    if (!availability?.isAvailable) {
+      Alert.alert(
+        'Not Available',
+        'This time slot is not available. Please choose a different time.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const startTime = new Date(selectedDate);
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      startTime.setHours(hours, minutes, 0, 0);
+      
+      const endTime = new Date(startTime);
+      const durationMinutes = getDurationInMinutes(selectedDuration);
+      endTime.setMinutes(endTime.getMinutes() + durationMinutes);
+      
+      // Use the first available connector type
+      const connectorType = charger.connectorTypes?.[0]?.type || 'CCS';
+      
+      const reservationData = {
+        stationId: charger._id || charger.id,
+        connectorType,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        notes: notes.trim() || undefined
+      };
+
+      // Add vehicle info if provided
+      if (vehicleInfo.make || vehicleInfo.model || vehicleInfo.batteryCapacity || vehicleInfo.currentCharge) {
+        reservationData.vehicleInfo = {};
+        if (vehicleInfo.make) reservationData.vehicleInfo.make = vehicleInfo.make;
+        if (vehicleInfo.model) reservationData.vehicleInfo.model = vehicleInfo.model;
+        if (vehicleInfo.batteryCapacity) reservationData.vehicleInfo.batteryCapacity = parseFloat(vehicleInfo.batteryCapacity);
+        if (vehicleInfo.currentCharge) reservationData.vehicleInfo.currentCharge = parseFloat(vehicleInfo.currentCharge);
+      }
+
+      const response = await ApiService.createReservation(reservationData);
+      
+      if (response.success) {
+        Alert.alert(
+          'Reservation Confirmed!',
+          `Your charging session at ${charger.name} has been reserved for ${formatDate(selectedDate)} at ${selectedTime} for ${selectedDuration}.`,
+          [
+            {
+              text: 'View Reservations',
+              onPress: () => {
+                navigation.navigate('Reservations');
+              }
+            },
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack()
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Reservation Failed',
+          response.message || 'Failed to create reservation. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error creating reservation:', error);
+      Alert.alert(
+        'Error',
+        'Failed to create reservation. Please check your connection and try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle date selection and update time if needed
@@ -179,10 +311,10 @@ export default function ReservationScreen({ navigation, route }) {
             <View style={styles.availabilityContainer}>
               <View style={[
                 styles.availabilityDot,
-                { backgroundColor: getAvailabilityColor(charger.available, charger.total) }
+                { backgroundColor: getAvailabilityColor(charger.available || charger.availablePorts, charger.total || charger.totalPorts) }
               ]} />
               <Text style={styles.availabilityText}>
-                {charger.available}/{charger.total} available
+                {charger.available || charger.availablePorts}/{charger.total || charger.totalPorts} available
               </Text>
             </View>
           </View>
@@ -192,17 +324,85 @@ export default function ReservationScreen({ navigation, route }) {
           <View style={styles.chargerDetails}>
             <View style={styles.detailItem}>
               <MaterialIcons name="flash-on" size={16} color="#666" />
-              <Text style={styles.detailText}>{charger.type}</Text>
+              <Text style={styles.detailText}>{charger.type || charger.connectorTypes?.[0]?.type}</Text>
             </View>
             <View style={styles.detailItem}>
               <MaterialIcons name="speed" size={16} color="#666" />
-              <Text style={styles.detailText}>{charger.power}</Text>
+              <Text style={styles.detailText}>{charger.power || charger.connectorTypes?.[0]?.power + 'kW'}</Text>
             </View>
             <View style={styles.detailItem}>
               <MaterialIcons name="attach-money" size={16} color="#666" />
-              <Text style={styles.detailText}>{charger.price}</Text>
+              <Text style={styles.detailText}>{charger.price || '$0.25/kWh'}</Text>
             </View>
           </View>
+        </View>
+
+        {/* Vehicle Information */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Vehicle Information (Optional)</Text>
+          <View style={styles.vehicleForm}>
+            <View style={styles.inputRow}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Make</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={vehicleInfo.make}
+                  onChangeText={(text) => setVehicleInfo(prev => ({ ...prev, make: text }))}
+                  placeholder="Tesla, BMW, etc."
+                  placeholderTextColor="#999"
+                />
+              </View>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Model</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={vehicleInfo.model}
+                  onChangeText={(text) => setVehicleInfo(prev => ({ ...prev, model: text }))}
+                  placeholder="Model 3, i3, etc."
+                  placeholderTextColor="#999"
+                />
+              </View>
+            </View>
+            <View style={styles.inputRow}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Battery Capacity (kWh)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={vehicleInfo.batteryCapacity}
+                  onChangeText={(text) => setVehicleInfo(prev => ({ ...prev, batteryCapacity: text }))}
+                  placeholder="75"
+                  placeholderTextColor="#999"
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Current Charge (%)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={vehicleInfo.currentCharge}
+                  onChangeText={(text) => setVehicleInfo(prev => ({ ...prev, currentCharge: text }))}
+                  placeholder="20"
+                  placeholderTextColor="#999"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Notes */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Notes (Optional)</Text>
+          <TextInput
+            style={styles.notesInput}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Any special requirements or notes..."
+            placeholderTextColor="#999"
+            multiline
+            numberOfLines={3}
+            maxLength={500}
+          />
         </View>
 
         {/* Date Selection */}
@@ -259,9 +459,7 @@ export default function ReservationScreen({ navigation, route }) {
                   ]}>
                     {time}
                   </Text>
-                  {isPast && (
-                    <Text style={styles.pastLabel}>Past</Text>
-                  )}
+                  {isPast && <Text style={styles.pastLabel}>Past</Text>}
                 </TouchableOpacity>
               );
             })}
@@ -292,34 +490,63 @@ export default function ReservationScreen({ navigation, route }) {
           </View>
         </View>
 
+        {/* Availability Status */}
+        {availabilityLoading ? (
+          <View style={styles.availabilityStatus}>
+            <ActivityIndicator size="small" color="#4CAF50" />
+            <Text style={styles.availabilityText}>Checking availability...</Text>
+          </View>
+        ) : availability && (
+          <View style={styles.availabilityStatus}>
+            <MaterialIcons 
+              name={availability.isAvailable ? "check-circle" : "cancel"} 
+              size={20} 
+              color={availability.isAvailable ? "#4CAF50" : "#F44336"} 
+            />
+            <Text style={[
+              styles.availabilityText,
+              { color: availability.isAvailable ? "#4CAF50" : "#F44336" }
+            ]}>
+              {availability.isAvailable 
+                ? `Available (${availability.availableConnectors} of ${availability.totalConnectors} connectors)`
+                : `Not available (${availability.reservedConnectors} of ${availability.totalConnectors} reserved)`
+              }
+            </Text>
+          </View>
+        )}
+
         {/* Reservation Summary */}
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryTitle}>Reservation Summary</Text>
+          
+          <View style={styles.summaryRow}>
+            <MaterialIcons name="location-on" size={16} color="#666" />
+            <Text style={styles.summaryText}>{charger.name}</Text>
+          </View>
+          
+          <View style={styles.summaryRow}>
+            <MaterialIcons name="calendar-today" size={16} color="#666" />
+            <Text style={styles.summaryText}>{formatDate(selectedDate)}</Text>
+          </View>
+          
+          <View style={styles.summaryRow}>
+            <MaterialIcons name="access-time" size={16} color="#666" />
+            <Text style={styles.summaryText}>{selectedTime} for {selectedDuration}</Text>
+          </View>
+          
+          <View style={styles.summaryRow}>
+            <MaterialIcons name="ev-station" size={16} color="#666" />
+            <Text style={styles.summaryText}>{charger.connectorTypes?.[0]?.type || 'CCS'}</Text>
+          </View>
+
           {!isCurrentSelectionValid() && (
             <View style={styles.warningContainer}>
-              <MaterialIcons name="warning" size={20} color="#FF6B6B" />
+              <MaterialIcons name="warning" size={16} color="#FF6B6B" />
               <Text style={styles.warningText}>
-                Selected time has passed. Please choose a future time slot.
+                {!availability?.isAvailable ? 'Time slot not available' : 'Selected time has passed'}
               </Text>
             </View>
           )}
-          <View style={styles.summaryRow}>
-            <MaterialIcons name="event" size={20} color="#666" />
-            <Text style={[
-              styles.summaryText,
-              !isCurrentSelectionValid() && styles.invalidSummaryText
-            ]}>
-              {formatDate(selectedDate)} at {selectedTime}
-            </Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <MaterialIcons name="schedule" size={20} color="#666" />
-            <Text style={styles.summaryText}>Duration: {selectedDuration}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <MaterialIcons name="location-on" size={20} color="#666" />
-            <Text style={styles.summaryText}>{charger.name}</Text>
-          </View>
         </View>
       </ScrollView>
 
@@ -328,21 +555,21 @@ export default function ReservationScreen({ navigation, route }) {
         <TouchableOpacity 
           style={[
             styles.reserveButton,
-            !isCurrentSelectionValid() && styles.disabledReserveButton
-          ]} 
+            (!isCurrentSelectionValid() || loading) && styles.disabledReserveButton
+          ]}
           onPress={handleReservation}
-          disabled={!isCurrentSelectionValid()}
+          disabled={!isCurrentSelectionValid() || loading}
         >
-          <MaterialIcons 
-            name="event-available" 
-            size={24} 
-            color={isCurrentSelectionValid() ? "white" : "#999"} 
-          />
+          {loading ? (
+            <ActivityIndicator size="small" color="white" />
+          ) : (
+            <MaterialIcons name="event-available" size={24} color="white" />
+          )}
           <Text style={[
             styles.reserveButtonText,
-            !isCurrentSelectionValid() && styles.disabledReserveButtonText
+            (!isCurrentSelectionValid() || loading) && styles.disabledReserveButtonText
           ]}>
-            Confirm Reservation
+            {loading ? 'Creating Reservation...' : 'Reserve Now'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -642,5 +869,54 @@ const styles = StyleSheet.create({
   },
   disabledReserveButtonText: {
     color: '#999',
+  },
+  vehicleForm: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  inputContainer: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: '#f9f9f9',
+  },
+  notesInput: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    fontSize: 16,
+    color: '#333',
+    textAlignVertical: 'top',
+    minHeight: 80,
+  },
+  availabilityStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: 'white',
+    borderRadius: 8,
   },
 }); 

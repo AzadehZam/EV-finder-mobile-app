@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.1.91:3000/api';
+// Use environment-based API URL
+const API_BASE_URL = __DEV__ 
+  ? 'http://192.168.1.91:3000/api'  // Development - local IP
+  : 'https://ev-finder-backend.onrender.com/api';  // Production - deployed backend
 
 class ApiService {
   constructor() {
@@ -175,6 +178,36 @@ class ApiService {
       method: 'PATCH',
       body: JSON.stringify(sessionData),
     });
+  }
+
+  // New enhanced reservation methods
+  async checkAvailability(stationId, connectorType, startTime, endTime) {
+    const params = new URLSearchParams({
+      stationId,
+      connectorType,
+      startTime,
+      endTime
+    });
+    return this.makeRequest(`/reservations/availability?${params}`);
+  }
+
+  async getActiveReservations() {
+    return this.makeRequest('/reservations/active');
+  }
+
+  async getReservationAnalytics(period = 30) {
+    return this.makeRequest(`/reservations/analytics?period=${period}`);
+  }
+
+  async confirmReservation(reservationId) {
+    return this.makeRequest(`/reservations/${reservationId}/confirm`, {
+      method: 'PATCH',
+    });
+  }
+
+  async getStationReservations(stationId, params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.makeRequest(`/reservations/station/${stationId}${queryString ? `?${queryString}` : ''}`);
   }
 
   // Health check
