@@ -52,17 +52,35 @@ class ApiService {
     };
 
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, config);
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        ...config,
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'API request failed');
+        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       return data;
     } catch (error) {
-      console.error('API request error:', error);
-      throw error;
+      if (error.name === 'AbortError') {
+        console.error('API request timeout:', endpoint);
+        throw new Error('Request timeout - please check your connection');
+      } else if (error.message.includes('Network request failed') || error.message.includes('fetch')) {
+        console.error('Network error:', error);
+        throw new Error('Network error - please check your connection');
+      } else {
+        console.error('API request error:', error);
+        throw error;
+      }
     }
   }
 
