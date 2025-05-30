@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import WelcomeScreen from './screens/WelcomeScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import DashboardScreen from './screens/DashboardScreen';
+import ChargerFinderScreen from './screens/ChargerFinderScreen';
 import { ActivityIndicator, View } from 'react-native';
 
 const Stack = createStackNavigator();
@@ -28,8 +29,11 @@ function AppNavigator() {
         }}
       >
         {user ? (
-          // User is authenticated - show Dashboard
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          // User is authenticated - show Dashboard and other screens
+          <>
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+            <Stack.Screen name="ChargerFinder" component={ChargerFinderScreen} />
+          </>
         ) : (
           // User is not authenticated - show auth flow
           <>

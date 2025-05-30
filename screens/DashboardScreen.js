@@ -21,8 +21,8 @@ export default function DashboardScreen({ navigation }) {
   };
 
   const handleFindStations = () => {
-    // TODO: Navigate to charging stations map
-    console.log('Navigate to charging stations');
+    // Navigate to charging stations map
+    navigation.navigate('ChargerFinder');
   };
 
   const handleMyFavorites = () => {
