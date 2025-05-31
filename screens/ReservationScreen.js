@@ -110,10 +110,12 @@ export default function ReservationScreen({ navigation, route }) {
         });
       }
     } catch (error) {
-      console.error('Error checking availability:', error);
-      
       // Handle authentication errors specifically
-      if (error.message.includes('Access token required') || error.message.includes('401')) {
+      if (error.message.includes('Access token required') || 
+          error.message.includes('401') || 
+          error.message.includes('Unauthorized') ||
+          error.message === 'Access token required') {
+        // Don't log authentication errors as they're expected when not logged in
         setAvailability({
           isAvailable: true,
           availableConnectors: charger.connectorTypes?.length || 1,
@@ -121,6 +123,8 @@ export default function ReservationScreen({ navigation, route }) {
           requiresAuth: true
         });
       } else {
+        // Only log unexpected errors
+        console.error('Error checking availability:', error);
         // Fallback: assume available when API is not reachable
         setAvailability({
           isAvailable: true,
