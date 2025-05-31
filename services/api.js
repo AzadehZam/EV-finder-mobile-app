@@ -77,8 +77,11 @@ class ApiService {
       } else if (error.message.includes('Network request failed') || error.message.includes('fetch')) {
         console.error('Network error:', error);
         throw new Error('Network error - please check your connection');
-      } else if (error.message === 'Access token required' || error.message.includes('401')) {
-        // Don't log authentication errors as they're expected when not logged in
+      } else if (error.message === 'Access token required' || 
+                 error.message.includes('401') ||
+                 error.message === 'User not found' ||
+                 error.message.includes('404')) {
+        // Don't log authentication/user errors as they're expected when not logged in
         throw error;
       } else {
         console.error('API request error:', error);

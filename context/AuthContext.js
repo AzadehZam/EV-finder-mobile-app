@@ -36,8 +36,11 @@ export const AuthProvider = ({ children }) => {
             await AsyncStorage.removeItem('user');
           }
         } catch (error) {
-          console.error('Error fetching user profile:', error);
-          // Token might be expired, clear it
+          // Only log unexpected errors, not "User not found" which is normal for unauthenticated users
+          if (!error.message.includes('User not found') && !error.message.includes('404')) {
+            console.error('Error fetching user profile:', error);
+          }
+          // Token might be expired or user doesn't exist, clear it
           await ApiService.removeToken();
           await AsyncStorage.removeItem('user');
         }
